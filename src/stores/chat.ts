@@ -63,7 +63,7 @@ Please complete the payment process to confirm your tickets.`
     }
   }
 
-  const completePendingBooking = async (navigate = false) => {
+  const completePendingBooking = async () => {
     if (!pendingBooking.value) return
 
     const booking = await eventStore.createBooking(
@@ -78,13 +78,14 @@ Please complete the payment process to confirm your tickets.`
     showPayment.value = false
     pendingBooking.value = null
 
-    // Add confirmation message
+    // Add confirmation message with absolute URL
+    const baseUrl = import.meta.env.VITE_APP_URL || window.location.origin
     messages.value.push({
       role: 'assistant',
       content: `🎫 Payment Successful! Booking Confirmed!
 
 Your tickets have been reserved. Here's your digital ticket with QR code:
-/tickets/${booking.id}
+${baseUrl}/tickets/${booking.id}
 
 Show this QR code at the venue for entry. You can also view your booking details anytime in your dashboard.
 

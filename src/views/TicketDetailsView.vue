@@ -1,239 +1,175 @@
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { useEventStore } from '../stores/events'
 import AppLayout from '../components/layout/AppLayout.vue'
-import QRCode from 'qrcode.vue'
+import QRCode from '../components/tickets/QRCode.vue'
+import { doc, getDoc } from 'firebase/firestore'
+import { db } from '../services/firebase'
 import type { Booking } from '../stores/events'
 import type { Event } from '../types/event'
 
 const route = useRoute()
 const eventStore = useEventStore()
-const booking = ref<Booking | null>(null)
-const event = ref<Event | null>(null)
+
 const loading = ref(true)
 const error = ref('')
+const booking = ref<Booking | null>(null)
+const event = ref<Event | null>(null)
 
-const formatDate = (date: Date) => {
-  return new Date(date).toLocaleDateString('en-US', {
-    weekday: 'long',
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric'
-  })
-}
-
-// Create QR code data
-const qrCodeData = computed(() => {
-  if (!booking.value || !event.value) return ''
-  
-  // Create the full URL for the ticket
-  const ticketUrl = `${window.location.origin}/tickets/${booking.value.id}`
-  
-  return JSON.stringify({
-    url: ticketUrl,
-    bookingId: booking.value.id,
-    eventId: event.value.id,
-    eventTitle: event.value.title,
-    date: event.value.date,
-    time: event.value.time,
-    quantity: booking.value.quantity,
-    status: booking.value.status
-  })
-})
-
-onMounted(async () => {
+const loadTicketDetails = async () => {
   try {
     loading.value = true
+    error.value = ''
+
     const bookingId = route.params.id as string
     
-    // Load events if not already loaded
-    if (eventStore.events.length === 0) {
-      await eventStore.loadEvents()
+    // Get booking directly from Firestore
+    const bookingDoc = await getDoc(doc(db, 'bookings', bookingId))
+    if (!bookingDoc.exists()) {
+      error.value = 'Booking not found'
+      return
     }
-    
-    // Find booking
-    const foundBooking = eventStore.bookings.find(b => b.id === bookingId)
-    if (!foundBooking) {
-      throw new Error('Booking not found')
+
+    booking.value = {
+      id: bookingDoc.id,
+      ...bookingDoc.data(),
+      bookingDate: bookingDoc.data().bookingDate.toDate()
+    } as Booking
+
+    // Get event directly from Firestore
+    const eventDoc = await getDoc(doc(db, 'events', booking.value.eventId))
+    if (!eventDoc.exists()) {
+      error.value = 'Event not found'
+      return
     }
-    booking.value = foundBooking
-    
-    // Find associated event
-    const foundEvent = eventStore.events.find(e => e.id === foundBooking.eventId)
-    if (!foundEvent) {
-      throw new Error('Event not found')
-    }
-    event.value = foundEvent
+
+    event.value = {
+      id: eventDoc.id,
+      ...eventDoc.data()
+    } as Event
+
   } catch (err: any) {
+    console.error('Error loading ticket details:', err)
     error.value = err.message
   } finally {
     loading.value = false
   }
+}
+
+onMounted(() => {
+  loadTicketDetails()
 })
 </script>
 
 <template>
   <AppLayout>
     <div class="container py-4">
+      <!-- Loading State -->
       <div v-if="loading" class="text-center py-5">
         <div class="spinner-border text-primary"></div>
       </div>
 
+      <!-- Error State -->
       <div v-else-if="error" class="alert alert-danger">
         {{ error }}
       </div>
 
-      <template v-else-if="booking && event">
-        <!-- Ticket Header -->
-        <div class="d-flex justify-content-between align-items-start mb-4">
-          <div>
-            <h1 class="display-6 fw-bold mb-2">Ticket Details</h1>
-            <p class="text-muted mb-0">Booking ID: {{ booking.id }}</p>
+      <!-- Ticket Details -->
+      <div v-else-if="booking && event" class="booking-confirmation-card bg-light rounded p-4 mb-3">
+        <div class="text-center mb-4">
+          <div class="qr-code-container bg-white rounded p-3 d-inline-block shadow-sm">
+            <QRCode :booking-id="booking.id" />
           </div>
-          <span 
-            class="badge"
-            :class="`bg-${booking.status === 'Confirmed' ? 'success' : 'warning'} fs-6`"
-          >
-            {{ booking.status }}
-          </span>
         </div>
 
-        <div class="row g-4">
-          <!-- Event Details -->
-          <div class="col-lg-8">
-            <div class="card border-0 shadow-sm">
-              <img 
-                :src="event.image" 
-                :alt="event.title"
-                class="card-img-top"
-                style="height: 300px; object-fit: cover;"
-              >
-              <div class="card-body p-4">
-                <h2 class="h4 fw-bold mb-3">{{ event.title }}</h2>
-                
-                <div class="row g-3 mb-4">
-                  <div class="col-md-6">
-                    <div class="d-flex align-items-center">
-                      <div class="bg-primary-subtle p-2 rounded me-3">
-                        <i class="bi bi-calendar3 text-primary"></i>
-                      </div>
-                      <div>
-                        <div class="text-muted small">Date</div>
-                        <div>{{ formatDate(new Date(event.date)) }}</div>
-                      </div>
-                    </div>
-                  </div>
-                  
-                  <div class="col-md-6">
-                    <div class="d-flex align-items-center">
-                      <div class="bg-primary-subtle p-2 rounded me-3">
-                        <i class="bi bi-clock text-primary"></i>
-                      </div>
-                      <div>
-                        <div class="text-muted small">Time</div>
-                        <div>{{ event.time }}</div>
-                      </div>
-                    </div>
-                  </div>
-                  
-                  <div class="col-md-6">
-                    <div class="d-flex align-items-center">
-                      <div class="bg-primary-subtle p-2 rounded me-3">
-                        <i class="bi bi-geo-alt text-primary"></i>
-                      </div>
-                      <div>
-                        <div class="text-muted small">Location</div>
-                        <div>{{ event.location }}</div>
-                      </div>
-                    </div>
-                  </div>
-                  
-                  <div class="col-md-6">
-                    <div class="d-flex align-items-center">
-                      <div class="bg-primary-subtle p-2 rounded me-3">
-                        <i class="bi bi-tag text-primary"></i>
-                      </div>
-                      <div>
-                        <div class="text-muted small">Category</div>
-                        <div>{{ event.category }}</div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                <p class="mb-0">{{ event.description }}</p>
-              </div>
+        <div class="booking-details text-center">
+          <h4 class="fw-bold mb-3">{{ event.title }}</h4>
+          
+          <div class="text-muted mb-3">
+            <div class="mb-2">
+              <i class="bi bi-calendar3 me-2"></i>
+              {{ new Date(event.date).toLocaleDateString() }}
+              <i class="bi bi-clock ms-3 me-2"></i>
+              {{ event.time }}
+            </div>
+            <div>
+              <i class="bi bi-geo-alt me-2"></i>
+              {{ event.location }}
             </div>
           </div>
 
-          <!-- Booking Details -->
-          <div class="col-lg-4">
-            <div class="card border-0 shadow-sm">
-              <div class="card-body p-4">
-                <h3 class="h5 fw-bold mb-4">Booking Information</h3>
-                
-                <div class="mb-4">
-                  <div class="text-muted small mb-1">Booked On</div>
-                  <div>{{ formatDate(booking.bookingDate) }}</div>
-                </div>
+          <div class="ticket-info mb-4">
+            <div class="d-inline-block mx-3">
+              <div class="text-muted small">Tickets</div>
+              <div class="fw-bold">{{ booking.quantity }}</div>
+            </div>
+            <div class="d-inline-block mx-3">
+              <div class="text-muted small">Total Price</div>
+              <div class="fw-bold">${{ booking.totalPrice.toFixed(2) }}</div>
+            </div>
+          </div>
 
-                <div class="mb-4">
-                  <div class="text-muted small mb-1">Tickets</div>
-                  <div class="h4 mb-0">{{ booking.quantity }}</div>
-                </div>
-
-                <div class="mb-4">
-                  <div class="text-muted small mb-1">Price per Ticket</div>
-                  <div>${{ event.price.toFixed(2) }}</div>
-                </div>
-
-                <hr>
-
-                <div class="d-flex justify-content-between align-items-center mb-3">
-                  <div class="text-muted">Total Amount</div>
-                  <div class="h4 mb-0">${{ booking.totalPrice.toFixed(2) }}</div>
-                </div>
-
-                <!-- Add QR Code section -->
-                <div class="text-center mt-4">
-                  <div class="qr-code-container bg-light rounded-3 p-4 d-inline-block mb-3">
-                    <QRCode 
-                      :value="qrCodeData"
-                      :size="200"
-                      level="H"
-                      render-as="svg"
-                    />
-                  </div>
-                  <div class="text-muted small">
-                    Show this QR code at the venue for entry
-                  </div>
-                </div>
-
-                <div class="d-grid gap-2 mt-4">
-                  <button 
-                    class="btn btn-outline-primary"
-                    @click="$router.go(-1)"
-                  >
-                    <i class="bi bi-arrow-left me-2"></i>
-                    Back to Bookings
-                  </button>
-                </div>
-              </div>
+          <div class="status-section">
+            <span 
+              class="badge"
+              :class="{
+                'bg-success': booking.status === 'Confirmed',
+                'bg-warning': booking.status === 'Pending',
+                'bg-danger': booking.status === 'Cancelled'
+              }"
+            >
+              {{ booking.status }}
+            </span>
+            <div class="text-muted small mt-2">
+              Booked on {{ new Date(booking.bookingDate).toLocaleDateString() }}
             </div>
           </div>
         </div>
-      </template>
+      </div>
+
+      <!-- Not Found State -->
+      <div v-else class="text-center py-5">
+        <div class="mb-3">
+          <i class="bi bi-ticket-detailed display-1 text-muted"></i>
+        </div>
+        <h3>Ticket Not Found</h3>
+        <p class="text-muted">The ticket you're looking for doesn't exist.</p>
+        <router-link to="/" class="btn btn-primary">
+          Go to Home
+        </router-link>
+      </div>
     </div>
   </AppLayout>
 </template>
 
 <style scoped>
-.badge {
-  padding: 0.5rem 1rem;
+.booking-confirmation-card {
+  max-width: 600px;
+  margin: 0 auto;
+  background-color: #f8f9fa;
 }
 
 .qr-code-container {
-  box-shadow: 0 0 10px rgba(0,0,0,0.1);
+  background: white;
+  padding: 1.5rem;
+  border-radius: 0.5rem;
+  display: inline-block;
+}
+
+.ticket-info {
+  background-color: white;
+  padding: 1rem;
+  border-radius: 0.5rem;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+}
+
+.status-section {
+  margin-top: 1.5rem;
+}
+
+.badge {
+  font-size: 0.9rem;
+  padding: 0.5rem 1rem;
 }
 </style> 
