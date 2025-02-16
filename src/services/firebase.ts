@@ -8,7 +8,9 @@ import {
   doc,
   query,
   where,
-  type DocumentData 
+  type DocumentData,
+  setDoc,
+  getDoc
 } from 'firebase/firestore'
 import { getAuth } from 'firebase/auth'
 import type { Event } from '../types/event'
@@ -24,18 +26,25 @@ const firebaseConfig = {
 }
 
 const app = initializeApp(firebaseConfig)
-const db = getFirestore(app)
+export const db = getFirestore(app)
+export const auth = getAuth(app)
 
 export const eventsCollection = collection(db, 'events')
 export const bookingsCollection = collection(db, 'bookings')
+export const usersCollection = collection(db, 'users')
 
-export const addEvent = async (event: Omit<Event, 'id'>) => {
+export const addEvent = async (eventData: Omit<Event, 'id'>): Promise<Event> => {
   try {
-    const docRef = await addDoc(eventsCollection, {
-      ...event,
+    const eventsRef = collection(db, 'events')
+    const docRef = await addDoc(eventsRef, {
+      ...eventData,
       createdAt: new Date()
     })
-    return { id: docRef.id, ...event }
+    
+    return {
+      id: docRef.id,
+      ...eventData
+    }
   } catch (error) {
     console.error('Error adding event:', error)
     throw error
@@ -95,6 +104,36 @@ export const getUserBookings = async (userId: string): Promise<Booking[]> => {
     return bookings
   } catch (error) {
     console.error('Error getting user bookings:', error)
+    throw error
+  }
+}
+
+export const setUserAsAdmin = async (userId: string, isAdmin: boolean) => {
+  const userRef = doc(db, 'users', userId)
+  await updateDoc(userRef, {
+    isAdmin: isAdmin
+  })
+}
+
+export const createUserDocument = async (userId: string, data: any) => {
+  try {
+    const userRef = doc(db, 'users', userId)
+    
+    // Check if user document already exists
+    const userSnap = await getDoc(userRef)
+    
+    if (!userSnap.exists()) {
+      // Create new user document
+      await setDoc(userRef, {
+        ...data,
+        isAdmin: false,
+        createdAt: new Date()
+      })
+    }
+    
+    return userRef
+  } catch (error) {
+    console.error('Error creating user document:', error)
     throw error
   }
 } 

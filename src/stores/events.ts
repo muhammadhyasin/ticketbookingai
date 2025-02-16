@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import { getEvents as getFirebaseEvents, updateEventTickets, addBooking, getUserBookings } from '../services/firebase'
+import { getEvents as getFirebaseEvents, updateEventTickets, addBooking, getUserBookings, addEvent as addFirebaseEvent } from '../services/firebase'
 import type { Event } from '../types/event'
 
 export interface Booking {
@@ -171,6 +171,28 @@ export const useEventStore = defineStore('events', () => {
       .reduce((total, booking) => total + booking.totalPrice, 0)
   })
 
+  // Add the addEvent function
+  const addEvent = async (eventData: Omit<Event, 'id'>) => {
+    try {
+      loading.value = true
+      error.value = null
+      
+      // Add event to Firebase
+      const newEvent = await addFirebaseEvent(eventData)
+      
+      // Update local state
+      events.value.push(newEvent)
+      
+      return newEvent
+    } catch (err: any) {
+      console.error('Error adding event:', err)
+      error.value = err.message
+      throw err
+    } finally {
+      loading.value = false
+    }
+  }
+
   return {
     events,
     bookings,
@@ -178,11 +200,12 @@ export const useEventStore = defineStore('events', () => {
     error,
     loadEvents,
     userBookings,
+    loadUserBookings,
     createBooking,
     cancelBooking,
-    loadUserBookings,
     activeTickets,
     pastEvents,
-    totalSpent
+    totalSpent,
+    addEvent
   }
 }) 

@@ -1,6 +1,7 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import { getAuth, onAuthStateChanged } from 'firebase/auth'
 import HomeView from '../views/HomeView.vue'
+import { adminGuard } from './guards'
 
 const router = createRouter({
   history: createWebHistory(),
@@ -32,7 +33,13 @@ const router = createRouter({
       path: '/admin',
       name: 'admin',
       component: () => import('../views/AdminView.vue'),
-      meta: { requiresAuth: true }
+      beforeEnter: adminGuard
+    },
+    {
+      path: '/admin/events/new',
+      name: 'new-event',
+      component: () => import('../views/NewEventView.vue'),
+      beforeEnter: adminGuard
     },
     {
       path: '/tickets/:id',

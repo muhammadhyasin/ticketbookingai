@@ -1,9 +1,11 @@
 <script setup lang="ts">
 import { useAuthStore } from '../../stores/auth'
 import { useRouter } from 'vue-router'
+import { useAdminStore } from '../../stores/admin'
 
 const authStore = useAuthStore()
 const router = useRouter()
+const adminStore = useAdminStore()
 
 const handleLogout = async () => {
   await authStore.logout()
@@ -44,7 +46,8 @@ const handleLogout = async () => {
                 Dashboard
               </router-link>
             </li>
-            <li class="nav-item">
+            <!-- Only show Events nav item for admins -->
+            <li class="nav-item" v-if="adminStore.isAdmin">
               <router-link class="nav-link" to="/admin">
                 <i class="bi bi-calendar-event me-1"></i>
                 Events
@@ -53,9 +56,10 @@ const handleLogout = async () => {
           </ul>
 
           <div class="d-flex align-items-center">
-            <!-- Add Event Button -->
+            <!-- Add Event Button - Only for admins -->
             <router-link 
-              to="/admin" 
+              v-if="adminStore.isAdmin"
+              to="/admin/events/new" 
               class="btn btn-light me-3"
             >
               <i class="bi bi-plus-lg me-2"></i>
@@ -79,7 +83,8 @@ const handleLogout = async () => {
                     Dashboard
                   </router-link>
                 </li>
-                <li>
+                <!-- Only show Manage Events for admins -->
+                <li v-if="adminStore.isAdmin">
                   <router-link class="dropdown-item" to="/admin">
                     <i class="bi bi-calendar-event me-2"></i>
                     Manage Events
