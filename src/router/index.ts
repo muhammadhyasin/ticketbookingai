@@ -45,7 +45,6 @@ const router = createRouter({
       path: '/tickets/:id',
       name: 'ticket-details',
       component: () => import('../views/TicketDetailsView.vue'),
-      meta: { requiresAuth: true }
     }
   ]
 })
