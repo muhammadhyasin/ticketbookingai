@@ -26,7 +26,7 @@ const router = createRouter({
     {
       path: '/admin',
       component: () => import('../views/AdminView.vue'),
-      meta: { requiresAuth: true, requiresAdmin: true }
+      meta: { requiresAuth: true }
     },
     {
       path: '/chat',
@@ -49,7 +49,19 @@ const router = createRouter({
       component: () => import('../views/TicketDetailsView.vue'),
       meta: { requiresAuth: true }
     },
-    // ... other routes
+    {
+      path: '/admin/events/new',
+      name: 'new-event',
+      component: () => import('../views/NewEventView.vue'),
+      meta: { requiresAuth: true }
+    },
+    {
+      path: '/tickets/:id',
+      name: 'ticket-details',
+      component: () => import('../views/TicketDetailsView.vue'),
+    },
+
+    
   ]
 })
 

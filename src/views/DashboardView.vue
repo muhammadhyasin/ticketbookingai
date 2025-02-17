@@ -5,21 +5,26 @@ import AppLayout from '../components/layout/AppLayout.vue'
 import { useAuthStore } from '../stores/auth'
 import { useEventStore } from '../stores/events'
 import type { Event } from '../types/event'
+import { useAdminStore } from '../stores/admin'
 
 const authStore = useAuthStore()
 const eventStore = useEventStore()
 const router = useRouter()
+const adminStore = useAdminStore()
 
 // Add screen size detection
 const isMobile = ref(window.innerWidth <= 768)
 
-onMounted(() => {
+onMounted(async () => {
   eventStore.loadEvents()
   
   // Add window resize listener
   window.addEventListener('resize', () => {
     isMobile.value = window.innerWidth <= 768
   })
+
+  // Check admin status
+  await adminStore.checkAdminStatus()
 })
 
 onUnmounted(() => {
@@ -55,6 +60,10 @@ const stats = computed(() => [
     color: 'warning'
   }
 ])
+
+const handleAddEvent = () => {
+  router.push('/admin/events/new')
+}
 </script>
 
 <template>
@@ -68,12 +77,21 @@ const stats = computed(() => [
           </div>
           <div class="user-welcome">
             <span class="greeting">Welcome back</span>
-            <h1>{{ authStore.userEmail?.split('@')[0] }}</h1>
+            <h1>
+              {{ authStore.userEmail?.split('@')[0] }}
+              <span v-if="adminStore.isAdmin" class="admin-badge">Admin</span>
+            </h1>
           </div>
         </div>
-        <router-link to="/admin" class="fab">
+        <!-- Only show admin actions if user is admin -->
+        <button 
+          v-if="adminStore.isAdmin" 
+          @click="handleAddEvent"
+          class="fab"
+          type="button"
+        >
           <i class="bi bi-plus-lg"></i>
-        </router-link>
+        </button>
       </header>
 
       <!-- Quick Actions -->
@@ -241,13 +259,25 @@ const stats = computed(() => [
   justify-content: center;
   color: white;
   font-size: 1.25rem;
-  text-decoration: none;
+  border: none;
   box-shadow: 0 4px 12px rgba(13, 110, 253, 0.3);
   transition: transform 0.2s;
+  cursor: pointer;
 }
 
-.fab:active {
-  transform: scale(0.95);
+.fab:hover {
+  transform: scale(1.05);
+}
+
+.admin-badge {
+  display: inline-block;
+  font-size: 0.75rem;
+  padding: 0.25rem 0.5rem;
+  background: #0d6efd;
+  color: white;
+  border-radius: 1rem;
+  margin-left: 0.5rem;
+  font-weight: 500;
 }
 
 .dashboard-content {

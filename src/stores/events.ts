@@ -1,9 +1,8 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import { getEvents as getFirebaseEvents, updateEventTickets, addBooking, getUserBookings, addEvent as addFirebaseEvent, getEventById as getFirebaseEventById } from '../services/firebase'
+import { getEvents as getFirebaseEvents, updateEventTickets, addBooking, getUserBookings, addEvent as addFirebaseEvent, getEventById as getFirebaseEventById, deleteFirebaseEvent, updateFirebaseEvent, getFirebaseBookingById } from '../services/firebase'
 import type { Event } from '../types/event'
-import { db } from '../config/firebase'
-import { collection, getDocs, doc, getDoc } from 'firebase/firestore'
+
 
 export interface Booking {
   id: string;
@@ -13,7 +12,10 @@ export interface Booking {
   totalPrice: number;
   bookingDate: Date;
   status: 'Confirmed' | 'Pending' | 'Cancelled';
+  includeGuide: boolean;
 }
+
+const GUIDE_COST = 40 // Add constant for guide cost
 
 export const useEventStore = defineStore('events', () => {
   const events = ref<Event[]>([])
@@ -56,35 +58,34 @@ export const useEventStore = defineStore('events', () => {
     }
   }
 
-  const createBooking = async (eventId: string, userId: string, quantity: number) => {
+  const createBooking = async (eventId: string, userId: string, quantity: number, includeGuide: boolean = false) => {
     try {
       loading.value = true
       error.value = null
-
-      console.log('Creating booking...', { eventId, userId, quantity }) // Debug log
 
       const event = events.value.find(e => e.id === eventId)
       if (!event) throw new Error('Event not found')
       if (event.availableTickets < quantity) throw new Error('Not enough tickets available')
 
+      const ticketCost = event.price * quantity
+      const guideCost = includeGuide ? GUIDE_COST : 0
+      const totalPrice = ticketCost + guideCost
+
       const bookingData: Omit<Booking, 'id'> = {
         eventId,
         userId,
         quantity,
-        totalPrice: event.price * quantity,
+        includeGuide,
+        status: 'Confirmed',
         bookingDate: new Date(),
-        status: 'Confirmed'
+        totalPrice
       }
-
-      console.log('Booking data prepared:', bookingData) // Debug log
 
       // Add to Firebase
       const newBooking = await addBooking(bookingData)
-      console.log('Booking added to Firebase:', newBooking) // Debug log
 
       // Update available tickets
       await updateEventTickets(eventId, event.availableTickets - quantity)
-      console.log('Tickets updated in Firebase') // Debug log
       
       // Update local state
       const eventIndex = events.value.findIndex(e => e.id === eventId)
@@ -96,7 +97,6 @@ export const useEventStore = defineStore('events', () => {
       bookings.value.push(newBooking)
       return newBooking
     } catch (err: any) {
-      console.error('Error in createBooking:', err) // Debug log
       error.value = err.message
       throw err
     } finally {
@@ -209,6 +209,60 @@ export const useEventStore = defineStore('events', () => {
     }
   }
 
+  const deleteEvent = async (eventId: string) => {
+    try {
+      loading.value = true
+      error.value = null
+      
+      // Delete from Firebase
+      await deleteFirebaseEvent(eventId)
+      
+      // Update local state
+      events.value = events.value.filter(e => e.id !== eventId)
+      
+    } catch (err: any) {
+      error.value = err.message
+      throw err
+    } finally {
+      loading.value = false
+    }
+  }
+
+  const updateEvent = async (eventData: Event) => {
+    try {
+      loading.value = true
+      error.value = null
+      
+      // Update in Firebase
+      await updateFirebaseEvent(eventData)
+      
+      // Update local state
+      const index = events.value.findIndex(e => e.id === eventData.id)
+      if (index !== -1) {
+        events.value[index] = eventData
+      }
+      
+    } catch (err: any) {
+      error.value = err.message
+      throw err
+    } finally {
+      loading.value = false
+    }
+  }
+
+  const getBookingById = async (bookingId: string) => {
+    try {
+      loading.value = true
+      error.value = null
+      return await getFirebaseBookingById(bookingId)
+    } catch (err: any) {
+      error.value = err.message
+      throw err
+    } finally {
+      loading.value = false
+    }
+  }
+
   return {
     events,
     bookings,
@@ -223,6 +277,9 @@ export const useEventStore = defineStore('events', () => {
     pastEvents,
     totalSpent,
     addEvent,
-    getEventById
+    getEventById,
+    deleteEvent,
+    updateEvent,
+    getBookingById
   }
 }) 

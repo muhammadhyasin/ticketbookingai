@@ -6,6 +6,16 @@ import { useAuthStore } from './auth'
 import type { ChatSession } from '@google/generative-ai'
 import type { Message, BookingAction } from '../types/chat'
 
+// Update the pendingBooking type
+type PendingBooking = {
+  eventId: string;
+  userId: string;
+  quantity: number;
+  includeGuide: boolean;
+}
+
+const GUIDE_COST = 40 // Add constant for guide cost
+
 export const useChatStore = defineStore('chat', () => {
   const messages = vueRef<Message[]>([])
   const isLoading = vueRef(false)
@@ -17,11 +27,18 @@ export const useChatStore = defineStore('chat', () => {
 
   // Add payment state
   const showPayment = vueRef(false)
-  const pendingBooking = vueRef<{
-    eventId: string;
-    userId: string;
-    quantity: number;
-  } | null>(null)
+  const pendingBooking = vueRef<PendingBooking | null>(null)
+
+  // Update the paymentAmount computed property to include guide cost
+  const paymentAmount = computed(() => {
+    if (!pendingBooking.value) return 0
+    const event = eventStore.events.find(e => e.id === pendingBooking.value.eventId)
+    if (!event) return 0
+    
+    const ticketCost = event.price * pendingBooking.value.quantity
+    const guideCost = pendingBooking.value.includeGuide ? GUIDE_COST : 0
+    return ticketCost + guideCost
+  })
 
   const handleBookingAction = async (action: BookingAction) => {
     try {
@@ -38,17 +55,16 @@ export const useChatStore = defineStore('chat', () => {
         throw new Error('Event not found')
       }
 
-      // Ask for ticket quantity first
-      const response = `How many tickets would you like to book for ${event.title}? (Available: ${event.availableTickets})`
-      
-      // Set pending booking with quantity as 0 to indicate waiting for quantity
+      // Set pending booking with initial values
       pendingBooking.value = {
         eventId: action.eventId,
         userId: authStore.user.uid,
-        quantity: 0
+        quantity: 0,
+        includeGuide: false
       }
 
-      return response
+      // Ask for ticket quantity first
+      return `How many tickets would you like to book for ${event.title}? (Available: ${event.availableTickets})`
 
     } catch (error) {
       console.error('Error in handleBookingAction:', error)
@@ -78,16 +94,61 @@ export const useChatStore = defineStore('chat', () => {
 
       // Update pending booking with quantity
       pendingBooking.value.quantity = quantity
+
+      // If guide is available, ask if they want one
+      if (event.guideAvailable) {
+        return `Would you like to add a tour guide for this event? A guide costs an additional $${GUIDE_COST}. (Reply with 'yes' or 'no')`
+      } else {
+        // If no guide available, proceed to payment
+        showPayment.value = true
+        return `Great! Let's proceed with booking ${quantity} ticket${quantity > 1 ? 's' : ''} for ${event.title}.
+        
+Total amount: $${(event.price * quantity).toFixed(2)}
+
+Please complete the payment process to confirm your tickets.`
+      }
+
+    } catch (error) {
+      console.error('Error in handleTicketQuantity:', error)
+      throw error
+    }
+  }
+
+  // Add new handler for guide response
+  const handleGuideResponse = async (content: string) => {
+    try {
+      if (!pendingBooking.value) {
+        throw new Error('No pending booking found')
+      }
+
+      const event = eventStore.events.find(e => e.id === pendingBooking.value.eventId)
+      if (!event) {
+        throw new Error('Event not found')
+      }
+
+      const response = content.toLowerCase()
+      if (response !== 'yes' && response !== 'no') {
+        return "Please reply with 'yes' or 'no' to add a tour guide."
+      }
+
+      pendingBooking.value.includeGuide = response === 'yes'
       showPayment.value = true
 
-      return `Great! Let's proceed with booking ${quantity} ticket${quantity > 1 ? 's' : ''} for ${event.title}.
+      const baseAmount = event.price * pendingBooking.value.quantity
+      const guideAmount = pendingBooking.value.includeGuide ? GUIDE_COST : 0
+      const totalAmount = baseAmount + guideAmount
+
+      const guideMessage = pendingBooking.value.includeGuide ? ' (including tour guide)' : ''
+      return `Great! Let's proceed with booking ${pendingBooking.value.quantity} ticket${pendingBooking.value.quantity > 1 ? 's' : ''} for ${event.title}${guideMessage}.
       
-Total amount: $${(event.price * quantity).toFixed(2)}
+Ticket${pendingBooking.value.quantity > 1 ? 's' : ''}: $${baseAmount.toFixed(2)}
+${pendingBooking.value.includeGuide ? `Guide: $${GUIDE_COST.toFixed(2)}` : ''}
+Total amount: $${totalAmount.toFixed(2)}
 
 Please complete the payment process to confirm your tickets.`
 
     } catch (error) {
-      console.error('Error in handleTicketQuantity:', error)
+      console.error('Error handling guide response:', error)
       throw error
     }
   }
@@ -102,6 +163,12 @@ Please complete the payment process to confirm your tickets.`
         }
         const response = await handleTicketQuantity(quantity)
         return response
+      }
+
+      // If waiting for guide response
+      const event = eventStore.events.find(e => e.id === pendingBooking.value?.eventId)
+      if (pendingBooking.value && event?.guideAvailable && pendingBooking.value.quantity > 0 && !showPayment.value) {
+        return await handleGuideResponse(content)
       }
 
       // If not waiting for quantity, process normally
@@ -146,7 +213,8 @@ Please complete the payment process to confirm your tickets.`
     const booking = await eventStore.createBooking(
       pendingBooking.value.eventId,
       pendingBooking.value.userId,
-      pendingBooking.value.quantity
+      pendingBooking.value.quantity,
+      pendingBooking.value.includeGuide  // Pass the guide preference
     )
 
     await eventStore.loadUserBookings(pendingBooking.value.userId)
@@ -228,6 +296,8 @@ Need anything else?`,
     completePendingBooking,
     handleBookingAction,
     handleTicketQuantity,
-    processMessage
+    processMessage,
+    handleGuideResponse,
+    paymentAmount
   }
 }) 

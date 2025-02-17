@@ -10,7 +10,8 @@ import {
   where,
   type DocumentData,
   setDoc,
-  getDoc
+  getDoc,
+  deleteDoc
 } from 'firebase/firestore'
 import { getAuth } from 'firebase/auth'
 import type { Event } from '../types/event'
@@ -154,5 +155,40 @@ export const getEventById = async (id: string): Promise<Event | null> => {
   } catch (error) {
     console.error('Error getting event:', error)
     return null
+  }
+}
+
+export const deleteFirebaseEvent = async (eventId: string) => {
+  const eventRef = doc(db, 'events', eventId)
+  await deleteDoc(eventRef)
+}
+
+export const updateFirebaseEvent = async (eventData: Event) => {
+  const eventRef = doc(db, 'events', eventData.id)
+  await updateDoc(eventRef, {
+    ...eventData,
+    updatedAt: new Date()
+  })
+  return eventData
+}
+
+export const getFirebaseBookingById = async (bookingId: string): Promise<Booking | null> => {
+  try {
+    const bookingRef = doc(db, 'bookings', bookingId)
+    const bookingDoc = await getDoc(bookingRef)
+    
+    if (bookingDoc.exists()) {
+      const data = bookingDoc.data()
+      return {
+        id: bookingDoc.id,
+        ...data,
+        bookingDate: data.bookingDate.toDate()
+      } as Booking
+    }
+    
+    return null
+  } catch (error) {
+    console.error('Error getting booking:', error)
+    throw error
   }
 } 

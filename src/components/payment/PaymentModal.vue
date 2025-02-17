@@ -1,8 +1,12 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
+import { useChatStore } from '../../stores/chat'
+import { useEventStore } from '../../stores/events'
 
 const router = useRouter()
+const chatStore = useChatStore()
+const eventStore = useEventStore()
 
 const props = defineProps<{
   show: boolean
@@ -10,6 +14,26 @@ const props = defineProps<{
   onSuccess: (navigate: boolean) => void
   onCancel: () => void
 }>()
+
+// Compute the breakdown of costs
+const paymentBreakdown = computed(() => {
+  if (!chatStore.pendingBooking) return null
+  const event = eventStore.events.find(e => e.id === chatStore.pendingBooking.eventId)
+  if (!event) return null
+
+  const ticketCost = event.price * chatStore.pendingBooking.quantity
+  const guideCost = chatStore.pendingBooking.includeGuide ? 40 : 0 // Guide cost is $40
+
+  return {
+    tickets: {
+      quantity: chatStore.pendingBooking.quantity,
+      unitPrice: event.price,
+      total: ticketCost
+    },
+    guide: guideCost,
+    total: ticketCost + guideCost
+  }
+})
 
 const isProcessing = ref(false)
 const cardNumber = ref('')
@@ -23,7 +47,7 @@ const processPayment = async () => {
   await new Promise(resolve => setTimeout(resolve, 2000))
   
   isProcessing.value = false
-  props.onSuccess(true) // Pass true to indicate navigation should happen
+  props.onSuccess(true)
 }
 </script>
 
@@ -45,10 +69,31 @@ const processPayment = async () => {
           </button>
         </div>
 
-        <!-- Amount Display -->
+        <!-- Amount Display with Breakdown -->
         <div class="amount-display">
-          <span class="amount-label">Total Amount</span>
-          <span class="amount-value">${{ amount.toFixed(2) }}</span>
+          <span class="amount-label">Payment Summary</span>
+          <div v-if="paymentBreakdown" class="amount-breakdown">
+            <!-- Tickets -->
+            <div class="breakdown-item">
+              <span class="item-label">
+                {{ paymentBreakdown.tickets.quantity }} 
+                Ticket{{ paymentBreakdown.tickets.quantity > 1 ? 's' : '' }}
+              </span>
+              <span class="item-amount">${{ paymentBreakdown.tickets.total.toFixed(2) }}</span>
+            </div>
+            
+            <!-- Guide if included -->
+            <div v-if="chatStore.pendingBooking?.includeGuide" class="breakdown-item">
+              <span class="item-label">Tour Guide</span>
+              <span class="item-amount">${{ paymentBreakdown.guide.toFixed(2) }}</span>
+            </div>
+            
+            <!-- Total -->
+            <div class="breakdown-total">
+              <span class="total-label">Total Amount</span>
+              <span class="total-amount">${{ paymentBreakdown.total.toFixed(2) }}</span>
+            </div>
+          </div>
         </div>
 
         <!-- Payment Form -->
@@ -370,6 +415,42 @@ label {
 .info-row .value {
   color: #1a1a1a;
   font-weight: 500;
+}
+
+.amount-breakdown {
+  margin-top: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  text-align: left;
+  background: rgba(255, 255, 255, 0.1);
+  padding: 1rem;
+  border-radius: 0.75rem;
+}
+
+.breakdown-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.875rem;
+}
+
+.item-label {
+  opacity: 0.9;
+}
+
+.breakdown-total {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 0.5rem;
+  padding-top: 0.5rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.2);
+  font-weight: 600;
+}
+
+.total-amount {
+  font-size: 1.25rem;
 }
 
 @media (max-width: 768px) {

@@ -21,7 +21,8 @@ const newEvent = ref<Omit<Event, 'id'>>({
   capacity: 0,
   availableTickets: 0,
   image: '',
-  status: 'Upcoming'
+  status: 'Upcoming',
+  guideAvailable: false
 })
 
 const handleSubmit = async () => {
@@ -160,6 +161,25 @@ const handleSubmit = async () => {
                   >
                 </div>
 
+                <!-- Add Guide Availability Toggle -->
+                <div class="mb-3">
+                  <div class="form-check form-switch">
+                    <input
+                      v-model="newEvent.guideAvailable"
+                      class="form-check-input"
+                      type="checkbox"
+                      role="switch"
+                      id="guideAvailable"
+                    >
+                    <label class="form-check-label" for="guideAvailable">
+                      Guide Available
+                    </label>
+                  </div>
+                  <small class="text-muted">
+                    Enable if a tour guide is available for this event
+                  </small>
+                </div>
+
                 <!-- Error Alert -->
                 <div v-if="error" class="alert alert-danger mb-3">
                   {{ error }}
@@ -195,5 +215,30 @@ const handleSubmit = async () => {
 <style scoped>
 .form-label {
   font-weight: 500;
+}
+
+.form-switch {
+  padding-left: 2.5em;
+}
+
+.form-switch .form-check-input {
+  width: 3em;
+  height: 1.5em;
+  margin-left: -2.5em;
+  background-image: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='-4 -4 8 8'><circle r='3' fill='rgba(0,0,0,0.25)'/></svg>");
+  background-position: left center;
+  border-radius: 2em;
+  transition: all .25s ease-in-out;
+}
+
+.form-switch .form-check-input:checked {
+  background-position: right center;
+  background-image: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='-4 -4 8 8'><circle r='3' fill='white'/></svg>");
+}
+
+.text-muted {
+  font-size: 0.875rem;
+  margin-top: 0.25rem;
+  display: block;
 }
 </style> 

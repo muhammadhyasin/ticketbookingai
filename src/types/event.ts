@@ -10,5 +10,6 @@ export interface Event {
   image: string;
   availableTickets: number;
   status: 'active' | 'past';
+  guideAvailable: boolean;
   // ... any other fields you need
 } 
