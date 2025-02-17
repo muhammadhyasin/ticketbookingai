@@ -85,12 +85,7 @@ const handleEdit = (event: Event) => {
                   {{ event.status }}
                 </span>
                 <div class="btn-group">
-                  <button class="btn btn-outline-primary btn-sm"
-                          @click="handleEdit(event)"
-                          :disabled="loading">
-                    <i class="bi bi-pencil me-1"></i>
-                    Edit
-                  </button>
+                  
                   <button class="btn btn-outline-danger btn-sm"
                           @click="handleDelete(event)"
                           :disabled="loading">

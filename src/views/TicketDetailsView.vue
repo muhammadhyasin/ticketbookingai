@@ -11,6 +11,7 @@ const eventStore = useEventStore()
 const loading = ref(true)
 const error = ref('')
 const booking = ref<Booking | null>(null)
+const showQRCode = ref(false)
 
 // Fetch booking by ID instead of user ID
 const fetchBooking = async () => {
@@ -53,6 +54,15 @@ const qrCodeUrl = computed(() => {
   }
   return ''
 })
+
+const isEventPast = computed(() => {
+  if (!event.value) return false
+  return new Date(event.value.date) < new Date()
+})
+
+const toggleQRCode = () => {
+  showQRCode.value = !showQRCode.value
+}
 </script>
 
 <template>
@@ -71,47 +81,76 @@ const qrCodeUrl = computed(() => {
       </div>
 
       <!-- Ticket Details -->
-      <div v-else-if="booking && event" class="card border-0 shadow-sm">
-        <div class="card-body p-4">
-          <div class="text-center mb-4">
-            <h2 class="h4 mb-0">Event Ticket</h2>
-            <p class="text-muted">Booking ID: {{ booking.id }}</p>
+      <div v-else-if="booking && event" class="ticket-container">
+        <div class="ticket-card" :class="{ 'past-event': isEventPast }">
+          <!-- Event Status Badge -->
+          <div class="status-badge" :class="{ 'past': isEventPast }">
+            {{ isEventPast ? 'Past Event' : 'Active' }}
           </div>
 
-          <div class="ticket-details">
-            <h3 class="h5 mb-4">{{ event.title }}</h3>
-            
-            <div class="row mb-3">
-              <div class="col-md-6">
-                <p class="mb-1"><strong>Date:</strong></p>
-                <p class="text-muted">{{ formatDate(new Date(event.date)) }}</p>
+          <!-- Event Image -->
+          <div class="event-image">
+            <img :src="event.image" :alt="event.title">
+          </div>
+
+          <!-- Ticket Content -->
+          <div class="ticket-content">
+            <h2 class="event-title">{{ event.title }}</h2>
+            <p class="booking-id">Booking ID: {{ booking.id }}</p>
+
+            <div class="info-grid">
+              <div class="info-item">
+                <i class="bi bi-calendar-event"></i>
+                <div>
+                  <strong>Date</strong>
+                  <span>{{ formatDate(new Date(event.date)) }}</span>
+                </div>
               </div>
-              <div class="col-md-6">
-                <p class="mb-1"><strong>Time:</strong></p>
-                <p class="text-muted">{{ event.time }}</p>
+
+              <div class="info-item">
+                <i class="bi bi-clock"></i>
+                <div>
+                  <strong>Time</strong>
+                  <span>{{ event.time }}</span>
+                </div>
+              </div>
+
+              <div class="info-item">
+                <i class="bi bi-geo-alt"></i>
+                <div>
+                  <strong>Location</strong>
+                  <span>{{ event.location }}</span>
+                </div>
+              </div>
+
+              <div class="info-item">
+                <i class="bi bi-ticket-perforated"></i>
+                <div>
+                  <strong>Quantity</strong>
+                  <span>{{ booking.quantity }} ticket(s)</span>
+                </div>
               </div>
             </div>
 
-            <div class="row mb-3">
-              <div class="col-md-6">
-                <p class="mb-1"><strong>Location:</strong></p>
-                <p class="text-muted">{{ event.location }}</p>
-              </div>
-              <div class="col-md-6">
-                <p class="mb-1"><strong>Quantity:</strong></p>
-                <p class="text-muted">{{ booking.quantity }} ticket(s)</p>
-              </div>
+            <!-- Guide Service Badge -->
+            <div v-if="booking.includeGuide" class="guide-badge">
+              <i class="bi bi-person-badge"></i>
+              Tour Guide Service Included
             </div>
 
-            <div v-if="booking.includeGuide" class="alert alert-info">
-              <i class="bi bi-info-circle me-2"></i>
-              Tour guide service included
-            </div>
-
-            <div class="qr-code text-center mt-4">
-              <img :src="qrCodeUrl" 
-                   alt="Ticket QR Code"
-                   class="img-fluid">
+            <!-- QR Code Section -->
+            <div class="qr-section">
+              <button @click="toggleQRCode" class="qr-toggle-btn">
+                <i class="bi" :class="showQRCode ? 'bi-chevron-up' : 'bi-chevron-down'"></i>
+                {{ showQRCode ? 'Hide QR Code' : 'Show QR Code' }}
+              </button>
+              
+              <transition name="slide-fade">
+                <div v-if="showQRCode" class="qr-code">
+                  <img :src="qrCodeUrl" alt="Ticket QR Code">
+                  <p class="text-muted">Show this QR code at the venue</p>
+                </div>
+              </transition>
             </div>
           </div>
         </div>
@@ -121,15 +160,173 @@ const qrCodeUrl = computed(() => {
 </template>
 
 <style scoped>
-.ticket-details {
-  max-width: 600px;
+.ticket-container {
+  max-width: 800px;
   margin: 0 auto;
+  padding: 1rem;
+}
+
+.ticket-card {
+  background: white;
+  border-radius: 1rem;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  overflow: hidden;
+  position: relative;
+  transition: transform 0.3s ease;
+}
+
+.ticket-card:hover {
+  transform: translateY(-4px);
+}
+
+.past-event {
+  opacity: 0.8;
+}
+
+.status-badge {
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+  padding: 0.5rem 1rem;
+  border-radius: 2rem;
+  background: #10B981;
+  color: white;
+  font-weight: 500;
+  z-index: 1;
+}
+
+.status-badge.past {
+  background: #6B7280;
+}
+
+.event-image {
+  height: 200px;
+  overflow: hidden;
+}
+
+.event-image img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.ticket-content {
+  padding: 2rem;
+}
+
+.event-title {
+  font-size: 1.5rem;
+  font-weight: 600;
+  margin-bottom: 0.5rem;
+}
+
+.booking-id {
+  color: #6B7280;
+  font-size: 0.875rem;
+  margin-bottom: 2rem;
+}
+
+.info-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 1.5rem;
+  margin-bottom: 2rem;
+}
+
+.info-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 1rem;
+}
+
+.info-item i {
+  font-size: 1.25rem;
+  color: #3B82F6;
+}
+
+.info-item div {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.info-item strong {
+  font-size: 0.875rem;
+  color: #6B7280;
+}
+
+.guide-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1rem;
+  background: #EFF6FF;
+  color: #3B82F6;
+  border-radius: 0.5rem;
+  margin-bottom: 2rem;
+}
+
+.qr-section {
+  border-top: 1px solid #E5E7EB;
+  padding-top: 1.5rem;
+}
+
+.qr-toggle-btn {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.75rem;
+  background: none;
+  border: 1px solid #E5E7EB;
+  border-radius: 0.5rem;
+  color: #6B7280;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.qr-toggle-btn:hover {
+  background: #F9FAFB;
+  color: #374151;
+}
+
+.qr-code {
+  text-align: center;
+  margin-top: 1.5rem;
 }
 
 .qr-code img {
   max-width: 200px;
-  border: 1px solid #dee2e6;
+  border: 1px solid #E5E7EB;
   padding: 1rem;
   border-radius: 0.5rem;
+}
+
+/* Animations */
+.slide-fade-enter-active,
+.slide-fade-leave-active {
+  transition: all 0.3s ease;
+}
+
+.slide-fade-enter-from,
+.slide-fade-leave-to {
+  transform: translateY(-20px);
+  opacity: 0;
+}
+
+@media (max-width: 640px) {
+  .info-grid {
+    grid-template-columns: 1fr;
+    gap: 1rem;
+  }
+
+  .ticket-content {
+    padding: 1.5rem;
+  }
+
+  .event-image {
+    height: 150px;
+  }
 }
 </style> 

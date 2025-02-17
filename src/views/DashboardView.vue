@@ -16,7 +16,15 @@ const adminStore = useAdminStore()
 const isMobile = ref(window.innerWidth <= 768)
 
 onMounted(async () => {
-  eventStore.loadEvents()
+  // Load both events and user bookings in parallel when component mounts
+  if (authStore.user?.uid) {
+    await Promise.all([
+      eventStore.loadEvents(),
+      eventStore.loadUserBookings(authStore.user.uid)
+    ])
+  } else {
+    await eventStore.loadEvents()
+  }
   
   // Add window resize listener
   window.addEventListener('resize', () => {
@@ -60,10 +68,6 @@ const stats = computed(() => [
     color: 'warning'
   }
 ])
-
-const handleAddEvent = () => {
-  router.push('/admin/events/new')
-}
 </script>
 
 <template>
@@ -77,21 +81,17 @@ const handleAddEvent = () => {
           </div>
           <div class="user-welcome">
             <span class="greeting">Welcome back</span>
-            <h1>
-              {{ authStore.userEmail?.split('@')[0] }}
-              <span v-if="adminStore.isAdmin" class="admin-badge">Admin</span>
-            </h1>
+            <h1>{{ authStore.userEmail?.split('@')[0] }}</h1>
           </div>
         </div>
-        <!-- Only show admin actions if user is admin -->
-        <button 
+        <!-- Only show FAB for admin users -->
+        <router-link 
           v-if="adminStore.isAdmin" 
-          @click="handleAddEvent"
+          to="/admin" 
           class="fab"
-          type="button"
         >
           <i class="bi bi-plus-lg"></i>
-        </button>
+        </router-link>
       </header>
 
       <!-- Quick Actions -->
@@ -259,25 +259,13 @@ const handleAddEvent = () => {
   justify-content: center;
   color: white;
   font-size: 1.25rem;
-  border: none;
+  text-decoration: none;
   box-shadow: 0 4px 12px rgba(13, 110, 253, 0.3);
   transition: transform 0.2s;
-  cursor: pointer;
 }
 
-.fab:hover {
-  transform: scale(1.05);
-}
-
-.admin-badge {
-  display: inline-block;
-  font-size: 0.75rem;
-  padding: 0.25rem 0.5rem;
-  background: #0d6efd;
-  color: white;
-  border-radius: 1rem;
-  margin-left: 0.5rem;
-  font-weight: 500;
+.fab:active {
+  transform: scale(0.95);
 }
 
 .dashboard-content {
