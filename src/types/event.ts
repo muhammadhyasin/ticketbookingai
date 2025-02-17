@@ -6,10 +6,9 @@ export interface Event {
   time: string;
   location: string;
   price: number;
-  category: 'Music' | 'Sports' | 'Technology' | 'Arts' | 'Food';
+  category: string;
   image: string;
-  capacity: number;
   availableTickets: number;
-  status: 'Upcoming' | 'Live' | 'Ended';
-  featured: boolean;
+  status: 'active' | 'past';
+  // ... any other fields you need
 } 

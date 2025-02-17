@@ -1,21 +1,10 @@
 import { defineStore } from 'pinia'
-import { ref as vueRef } from 'vue'
+import { ref as vueRef, computed } from 'vue'
 import { startChat } from '../services/gemini'
 import { useEventStore } from './events'
 import { useAuthStore } from './auth'
 import type { ChatSession } from '@google/generative-ai'
-
-export interface Message {
-  role: 'user' | 'assistant'
-  content: string
-  timestamp: Date
-}
-
-interface BookingAction {
-  action: 'book'
-  eventId: string
-  quantity: number
-}
+import type { Message, BookingAction } from '../types/chat'
 
 export const useChatStore = defineStore('chat', () => {
   const messages = vueRef<Message[]>([])
@@ -44,21 +33,109 @@ export const useChatStore = defineStore('chat', () => {
         throw new Error('User ID not found')
       }
 
-      // Store pending booking and show payment modal
+      const event = eventStore.events.find(e => e.id === action.eventId)
+      if (!event) {
+        throw new Error('Event not found')
+      }
+
+      // Ask for ticket quantity first
+      const response = `How many tickets would you like to book for ${event.title}? (Available: ${event.availableTickets})`
+      
+      // Set pending booking with quantity as 0 to indicate waiting for quantity
       pendingBooking.value = {
         eventId: action.eventId,
         userId: authStore.user.uid,
-        quantity: action.quantity
+        quantity: 0
       }
-      showPayment.value = true
 
-      // Return message about payment
-      return `Great! Let's proceed with the payment for your booking.
-      
-Please complete the payment process to confirm your tickets.`
+      return response
 
     } catch (error) {
       console.error('Error in handleBookingAction:', error)
+      throw error
+    }
+  }
+
+  const handleTicketQuantity = async (quantity: number) => {
+    try {
+      if (!pendingBooking.value) {
+        throw new Error('No pending booking found')
+      }
+
+      const event = eventStore.events.find(e => e.id === pendingBooking.value.eventId)
+      if (!event) {
+        throw new Error('Event not found')
+      }
+
+      // Validate quantity
+      if (quantity <= 0) {
+        return 'Please enter a valid number of tickets (greater than 0)'
+      }
+
+      if (quantity > event.availableTickets) {
+        return `Sorry, only ${event.availableTickets} tickets are available. Please choose a smaller quantity.`
+      }
+
+      // Update pending booking with quantity
+      pendingBooking.value.quantity = quantity
+      showPayment.value = true
+
+      return `Great! Let's proceed with booking ${quantity} ticket${quantity > 1 ? 's' : ''} for ${event.title}.
+      
+Total amount: $${(event.price * quantity).toFixed(2)}
+
+Please complete the payment process to confirm your tickets.`
+
+    } catch (error) {
+      console.error('Error in handleTicketQuantity:', error)
+      throw error
+    }
+  }
+
+  const processMessage = async (content: string) => {
+    try {
+      // If waiting for ticket quantity
+      if (pendingBooking.value && pendingBooking.value.quantity === 0) {
+        const quantity = parseInt(content)
+        if (isNaN(quantity)) {
+          return 'Please enter a valid number for ticket quantity.'
+        }
+        const response = await handleTicketQuantity(quantity)
+        return response
+      }
+
+      // If not waiting for quantity, process normally
+      if (!chatSession.value) {
+        await initializeChat()
+      }
+
+      if (!chatSession.value) {
+        throw new Error('Chat session not initialized')
+      }
+
+      const result = await chatSession.value.sendMessage(content)
+      const response = await result.response
+      let assistantMessage = response.text()
+
+      // Check if the response is a booking action
+      try {
+        if (assistantMessage.includes('"action": "book"')) {
+          const jsonStartIndex = assistantMessage.indexOf('{')
+          const jsonEndIndex = assistantMessage.lastIndexOf('}') + 1
+          const jsonStr = assistantMessage.substring(jsonStartIndex, jsonEndIndex)
+          const actionData = JSON.parse(jsonStr) as BookingAction
+          
+          if (actionData.action === 'book') {
+            assistantMessage = await handleBookingAction(actionData)
+          }
+        }
+      } catch (e) {
+        console.error('Error parsing booking action:', e)
+      }
+
+      return assistantMessage
+    } catch (error) {
+      console.error('Error processing message:', error)
       throw error
     }
   }
@@ -108,14 +185,6 @@ Need anything else?`,
   }
 
   const sendMessage = async (content: string) => {
-    if (!chatSession.value) {
-      await initializeChat()
-    }
-
-    if (!chatSession.value) {
-      throw new Error('Chat session not initialized')
-    }
-
     try {
       isLoading.value = true
       error.value = null
@@ -126,39 +195,17 @@ Need anything else?`,
         timestamp: new Date()
       })
 
-      const result = await chatSession.value.sendMessage(content)
-      const response = await result.response
-      let assistantMessage = response.text()
+      const assistantMessage = await processMessage(content)
 
-      console.log('AI Response:', assistantMessage) // Debug log
-
-      // Check if the response is a booking action
-      try {
-        if (assistantMessage.includes('"action": "book"')) {
-          const jsonStartIndex = assistantMessage.indexOf('{')
-          const jsonEndIndex = assistantMessage.lastIndexOf('}') + 1
-          const jsonStr = assistantMessage.substring(jsonStartIndex, jsonEndIndex)
-          
-          console.log('Extracted JSON:', jsonStr) // Debug log
-          
-          const actionData = JSON.parse(jsonStr) as BookingAction
-          console.log('Parsed action data:', actionData) // Debug log
-          
-          if (actionData.action === 'book') {
-            assistantMessage = await handleBookingAction(actionData)
-          }
-        }
-      } catch (e) {
-        console.error('Error parsing booking action:', e) // Debug log
+      // Only add assistant message if it's not null
+      if (assistantMessage) {
+        messages.value.push({
+          role: 'assistant',
+          content: assistantMessage,
+          timestamp: new Date()
+        })
       }
-
-      messages.value.push({
-        role: 'assistant',
-        content: assistantMessage,
-        timestamp: new Date()
-      })
     } catch (err: any) {
-      console.error('Error in sendMessage:', err) // Debug log
       error.value = err.message
       messages.value.push({
         role: 'assistant',
@@ -178,6 +225,9 @@ Need anything else?`,
     initializeChat,
     showPayment,
     pendingBooking,
-    completePendingBooking
+    completePendingBooking,
+    handleBookingAction,
+    handleTicketQuantity,
+    processMessage
   }
 }) 

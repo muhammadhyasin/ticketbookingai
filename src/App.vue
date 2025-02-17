@@ -19,12 +19,7 @@ onMounted(() => {
 </script>
 
 <template>
-  <div v-if="loading" class="min-vh-100 d-flex align-items-center justify-content-center">
-    <div class="spinner-border text-primary" role="status">
-      <span class="visually-hidden">Loading...</span>
-    </div>
-  </div>
-  <router-view v-else />
+  <router-view></router-view>
 </template>
 
 <style scoped>

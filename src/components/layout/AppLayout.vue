@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { ref } from 'vue'
 import { useAuthStore } from '../../stores/auth'
 import { useRouter } from 'vue-router'
 import { useAdminStore } from '../../stores/admin'
@@ -6,101 +7,81 @@ import { useAdminStore } from '../../stores/admin'
 const authStore = useAuthStore()
 const router = useRouter()
 const adminStore = useAdminStore()
+const showMenu = ref(false)
 
 const handleLogout = async () => {
   await authStore.logout()
   router.push('/login')
 }
+
+const toggleMenu = () => {
+  showMenu.value = !showMenu.value
+}
 </script>
 
 <template>
-  <div>
-    <!-- Navigation -->
-    <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
-      <div class="container">
-        <router-link class="navbar-brand" to="/">
-          <i class="bi bi-ticket-perforated-fill me-2"></i>
-          Event Booking
+  <div class="app-layout">
+    <!-- Modern App Navigation -->
+    <nav class="app-nav">
+      <div class="nav-container">
+        <router-link to="/dashboard" class="nav-brand">
+          <div class="brand-icon">
+            <i class="bi bi-ticket-perforated-fill"></i>
+          </div>
+          <span class="brand-text">Events</span>
         </router-link>
 
-        <button 
-          class="navbar-toggler" 
-          type="button" 
-          data-bs-toggle="collapse" 
-          data-bs-target="#navbarNav"
-        >
-          <span class="navbar-toggler-icon"></span>
-        </button>
-
-        <div class="collapse navbar-collapse" id="navbarNav">
-          <ul class="navbar-nav me-auto">
-            <li class="nav-item">
-              <router-link class="nav-link" to="/">
-                <i class="bi bi-chat-dots me-1"></i>
-                Chat Assistant
-              </router-link>
-            </li>
-            <li class="nav-item">
-              <router-link class="nav-link" to="/dashboard">
-                <i class="bi bi-speedometer2 me-1"></i>
-                Dashboard
-              </router-link>
-            </li>
-            <!-- Only show Events nav item for admins -->
-            <li class="nav-item" v-if="adminStore.isAdmin">
-              <router-link class="nav-link" to="/admin">
-                <i class="bi bi-calendar-event me-1"></i>
-                Events
-              </router-link>
-            </li>
-          </ul>
-
-          <div class="d-flex align-items-center">
-            <!-- Add Event Button - Only for admins -->
-            <router-link 
-              v-if="adminStore.isAdmin"
-              to="/admin/events/new" 
-              class="btn btn-light me-3"
+        <div class="nav-actions">
+          <div class="dropdown">
+            <button 
+              class="action-button" 
+              type="button"
+              @click="toggleMenu"
             >
-              <i class="bi bi-plus-lg me-2"></i>
-              Add Event
-            </router-link>
+              <i class="bi bi-three-dots-vertical"></i>
+            </button>
 
-            <!-- User Menu -->
-            <div class="dropdown">
-              <button 
-                class="btn btn-light dropdown-toggle d-flex align-items-center" 
-                type="button" 
-                data-bs-toggle="dropdown"
+            <div 
+              class="dropdown-menu" 
+              :class="{ show: showMenu }"
+            >
+              <router-link 
+                v-if="adminStore.isAdmin"
+                to="/admin" 
+                class="menu-item"
+                @click="showMenu = false"
               >
-                <i class="bi bi-person-circle me-2"></i>
-                {{ authStore.userEmail?.split('@')[0] }}
+                <i class="bi bi-gear"></i>
+                <span>Manage Events</span>
+              </router-link>
+              
+              <router-link 
+                to="/dashboard" 
+                class="menu-item"
+                @click="showMenu = false"
+              >
+                <i class="bi bi-speedometer2"></i>
+                <span>Dashboard</span>
+              </router-link>
+              
+              <router-link 
+                to="/chat" 
+                class="menu-item"
+                @click="showMenu = false"
+              >
+                <i class="bi bi-chat-dots"></i>
+                <span>Chat Assistant</span>
+              </router-link>
+              
+              <div class="menu-divider"></div>
+              
+              <button 
+                @click="handleLogout"
+                class="menu-item text-danger"
+              >
+                <i class="bi bi-box-arrow-right"></i>
+                <span>Logout</span>
               </button>
-              <ul class="dropdown-menu dropdown-menu-end">
-                <li>
-                  <router-link class="dropdown-item" to="/dashboard">
-                    <i class="bi bi-speedometer2 me-2"></i>
-                    Dashboard
-                  </router-link>
-                </li>
-                <!-- Only show Manage Events for admins -->
-                <li v-if="adminStore.isAdmin">
-                  <router-link class="dropdown-item" to="/admin">
-                    <i class="bi bi-calendar-event me-2"></i>
-                    Manage Events
-                  </router-link>
-                </li>
-                <li><hr class="dropdown-divider"></li>
-                <li>
-                  <button 
-                    class="dropdown-item text-danger" 
-                    @click="handleLogout"
-                  >
-                    <i class="bi bi-box-arrow-right me-2"></i>
-                    Logout
-                  </button>
-                </li>
-              </ul>
             </div>
           </div>
         </div>
@@ -108,26 +89,164 @@ const handleLogout = async () => {
     </nav>
 
     <!-- Main Content -->
-    <main>
+    <main class="app-main">
       <slot></slot>
     </main>
   </div>
 </template>
 
 <style scoped>
-.navbar {
-  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+.app-layout {
+  min-height: 100vh;
+  background: #fafafa;
+  position: relative;
 }
 
-.dropdown-item {
-  padding: 0.5rem 1rem;
+.app-nav {
+  background: white;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  padding: 0.5rem 0;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.05);
 }
 
-.dropdown-item i {
-  width: 1.2rem;
+.nav-container {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0 1rem;
+  max-width: 768px;
+  margin: 0 auto;
 }
 
-.nav-link.router-link-active {
-  font-weight: 500;
+.nav-brand {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  text-decoration: none;
+}
+
+.brand-icon {
+  width: 2.5rem;
+  height: 2.5rem;
+  background: linear-gradient(135deg, #0d6efd, #0099ff);
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-size: 1.25rem;
+}
+
+.brand-text {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: #1a1a1a;
+}
+
+.action-button {
+  width: 2.5rem;
+  height: 2.5rem;
+  border: none;
+  background: transparent;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.25rem;
+  color: #1a1a1a;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.action-button:hover {
+  background: #f8f9fa;
+}
+
+.dropdown-menu {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  margin-top: 0.5rem;
+  background: white;
+  border: none;
+  border-radius: 1rem;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+  min-width: 200px;
+  padding: 0.5rem;
+  transform: none !important;
+  z-index: 101;
+}
+
+.menu-item {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.875rem 1rem;
+  color: #1a1a1a;
+  text-decoration: none;
+  border-radius: 0.75rem;
+  transition: background-color 0.2s;
+  border: none;
+  background: none;
+  width: 100%;
+  text-align: left;
+  font-size: 0.9375rem;
+}
+
+.menu-item i {
+  font-size: 1.25rem;
+}
+
+.menu-item:hover {
+  background: #f8f9fa;
+}
+
+.menu-item.text-danger {
+  color: #dc3545;
+}
+
+.menu-item.text-danger:hover {
+  background: #fff5f5;
+}
+
+.menu-divider {
+  height: 1px;
+  background: #eaeaea;
+  margin: 0.5rem 0;
+}
+
+/* Mobile optimizations */
+@media (max-width: 768px) {
+  .dropdown-menu {
+    position: fixed;
+    top: auto;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    margin: 0;
+    border-radius: 1.25rem 1.25rem 0 0;
+    padding: 1rem;
+    box-shadow: 0 -4px 12px rgba(0,0,0,0.1);
+    z-index: 1000;
+  }
+
+  .menu-item {
+    padding: 1rem;
+  }
+}
+
+/* iOS safe area support */
+@supports (padding-top: env(safe-area-inset-top)) {
+  .app-nav {
+    padding-top: calc(0.5rem + env(safe-area-inset-top));
+  }
+  
+  @media (max-width: 768px) {
+    .dropdown-menu {
+      padding-bottom: calc(1rem + env(safe-area-inset-bottom));
+    }
+  }
 }
 </style>

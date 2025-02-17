@@ -136,4 +136,23 @@ export const createUserDocument = async (userId: string, data: any) => {
     console.error('Error creating user document:', error)
     throw error
   }
+}
+
+export const getEventById = async (id: string): Promise<Event | null> => {
+  try {
+    const eventRef = doc(db, 'events', id)
+    const eventDoc = await getDoc(eventRef)
+    
+    if (eventDoc.exists()) {
+      return {
+        id: eventDoc.id,
+        ...eventDoc.data()
+      } as Event
+    }
+    
+    return null
+  } catch (error) {
+    console.error('Error getting event:', error)
+    return null
+  }
 } 

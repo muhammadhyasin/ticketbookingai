@@ -1,7 +1,9 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import { getEvents as getFirebaseEvents, updateEventTickets, addBooking, getUserBookings, addEvent as addFirebaseEvent } from '../services/firebase'
+import { getEvents as getFirebaseEvents, updateEventTickets, addBooking, getUserBookings, addEvent as addFirebaseEvent, getEventById as getFirebaseEventById } from '../services/firebase'
 import type { Event } from '../types/event'
+import { db } from '../config/firebase'
+import { collection, getDocs, doc, getDoc } from 'firebase/firestore'
 
 export interface Booking {
   id: string;
@@ -193,6 +195,20 @@ export const useEventStore = defineStore('events', () => {
     }
   }
 
+  // Add this new method
+  const getEventById = async (id: string) => {
+    try {
+      loading.value = true
+      error.value = null
+      return await getFirebaseEventById(id)
+    } catch (err: any) {
+      error.value = err.message
+      throw err
+    } finally {
+      loading.value = false
+    }
+  }
+
   return {
     events,
     bookings,
@@ -206,6 +222,7 @@ export const useEventStore = defineStore('events', () => {
     activeTickets,
     pastEvents,
     totalSpent,
-    addEvent
+    addEvent,
+    getEventById
   }
 }) 

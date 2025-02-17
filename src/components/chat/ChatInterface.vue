@@ -1,25 +1,16 @@
 <script setup lang="ts">
-import { ref, onMounted, nextTick, computed } from 'vue'
+import { ref, onMounted, nextTick, onUnmounted, computed } from 'vue'
 import { useChatStore } from '../../stores/chat'
-import { useEventStore } from '../../stores/events'
-import type { Message } from '../../stores/chat'
-import type { Event } from '../../types/event'
-import QRCode from 'qrcode.vue'
-import PaymentModal from '../payment/PaymentModal.vue'
 import { useRouter } from 'vue-router'
+import { useEventStore } from '../../stores/events'
+import PaymentModal from '../payment/PaymentModal.vue'
+import type { Event } from '../../types/event'
 
+const router = useRouter()
 const chatStore = useChatStore()
 const eventStore = useEventStore()
 const newMessage = ref('')
 const chatContainer = ref<HTMLElement | null>(null)
-const router = useRouter()
-
-// Create a ref for storing booking data
-const currentBooking = ref<{
-  bookingId: string;
-  event: Event;
-  quantity: number;
-} | null>(null)
 
 const scrollToBottom = async () => {
   await nextTick()
@@ -28,7 +19,7 @@ const scrollToBottom = async () => {
   }
 }
 
-const sendMessage = async (content: string) => {
+const sendMessage = async (content?: string) => {
   if (!newMessage.value.trim() && !content) return
   
   const messageContent = content || newMessage.value
@@ -46,94 +37,25 @@ const formatTime = (date: Date) => {
   }).format(date)
 }
 
-// Function to check if the message contains event listings
+// Add viewport height management for mobile
+const adjustHeight = () => {
+  const vh = window.innerHeight * 0.01
+  document.documentElement.style.setProperty('--vh', `${vh}px`)
+}
+
+const goToDashboard = () => {
+  router.push('/dashboard')
+}
+
 const isEventListing = (message: string) => {
   return message.includes('[EVENTS_LIST]')
 }
 
-// Function to get events for listing
 const getEventsForListing = () => {
   return eventStore.events
 }
 
-// Function to parse events from the message
-const parseEvents = (message: string): Event[] => {
-  const events = eventStore.events
-  const mentionedEvents = events.filter(event => message.includes(event.id))
-  return mentionedEvents
-}
-
-const formatBookingMessage = (content: string) => {
-  // Find the index where the JSON starts
-  const jsonStartIndex = content.indexOf('{')
-  if (jsonStartIndex === -1) return content
-  
-  // Return only the text part before the JSON
-  return content.substring(0, jsonStartIndex).trim()
-}
-
-const generateQRData = (bookingId: string, event: Event, quantity: number) => {
-  // Create the full URL for the ticket
-  const ticketUrl = `${window.location.origin}/tickets/${bookingId}`
-  
-  return JSON.stringify({
-    url: ticketUrl,
-    bookingId,
-    eventId: event.id,
-    eventTitle: event.title,
-    date: event.date,
-    time: event.time,
-    quantity: quantity,
-    status: 'Confirmed'
-  })
-}
-
-const formatMessageWithLinks = (content: string) => {
-  if (!content.includes('/tickets/')) return content
-
-  const bookingId = content.match(/\/tickets\/([a-zA-Z0-9-]+)/)?.[1]
-  if (!bookingId) return content
-
-  const booking = eventStore.bookings.find(b => b.id === bookingId)
-  const event = booking ? eventStore.events.find(e => e.id === booking.eventId) : null
-
-  if (!booking || !event) return content
-
-  // Store booking data for QR code rendering
-  currentBooking.value = {
-    bookingId,
-    event,
-    quantity: booking.quantity
-  }
-
-  return `
-    <div class="booking-confirmation-card bg-light rounded p-3 mb-3">
-      <div class="text-center mb-3">
-        <div class="qr-code-container bg-white rounded p-3 d-inline-block">
-          <div class="qr-code-placeholder"></div>
-        </div>
-      </div>
-      <div class="booking-details">
-        <h6 class="fw-bold mb-2">${event.title}</h6>
-        <div class="text-muted small mb-2">
-          <i class="bi bi-calendar3 me-2"></i>${new Date(event.date).toLocaleDateString()}
-          <i class="bi bi-clock ms-3 me-2"></i>${event.time}
-        </div>
-        <div class="text-muted small mb-2">
-          <i class="bi bi-ticket-perforated me-2"></i>${booking.quantity} ticket(s)
-        </div>
-        <div class="d-flex justify-content-between align-items-center">
-          <span class="badge bg-success">Confirmed</span>
-          <router-link to="/tickets/${bookingId}" class="btn btn-primary btn-sm">
-            View Details
-          </router-link>
-        </div>
-      </div>
-    </div>
-    ${content}`
-}
-
-// Add computed for payment amount
+// Add payment-related code
 const paymentAmount = computed(() => {
   if (!chatStore.pendingBooking) return 0
   const event = eventStore.events.find(e => e.id === chatStore.pendingBooking?.eventId)
@@ -148,280 +70,619 @@ const handlePaymentSuccess = async (navigate: boolean) => {
   }
 }
 
+// Add booking message formatter
+const formatBookingMessage = (content: string) => {
+  const jsonStartIndex = content.indexOf('{')
+  if (jsonStartIndex === -1) return content
+  return content.substring(0, jsonStartIndex).trim()
+}
+
 onMounted(() => {
   chatStore.initializeChat()
+  adjustHeight()
+  window.addEventListener('resize', adjustHeight)
+})
+
+onUnmounted(() => {
+  window.removeEventListener('resize', adjustHeight)
 })
 </script>
 
 <template>
-  <div class="chat-widget card border-0 shadow-lg">
-    <!-- Chat Header -->
-    <div class="card-header bg-primary text-white py-3">
-      <div class="d-flex align-items-center">
-        <i class="bi bi-robot fs-4 me-2"></i>
-        <div>
-          <h5 class="mb-0">Event Assistant</h5>
-          <small>AI-powered booking help</small>
+  <div class="mobile-chat">
+    <!-- Modern Chat Header -->
+    <header class="chat-header">
+      <div class="header-content">
+        <button @click="goToDashboard" class="back-button">
+          <i class="bi bi-arrow-left"></i>
+        </button>
+        
+        <div class="assistant-info">
+          <div class="avatar">
+            <i class="bi bi-robot"></i>
+          </div>
+          <div class="info">
+            <h6 class="title">AI Assistant</h6>
+            <span class="status">
+              <span class="status-dot"></span>
+              Online
+            </span>
+          </div>
         </div>
       </div>
-    </div>
+    </header>
 
     <!-- Chat Messages -->
-    <div 
+    <main 
       ref="chatContainer"
-      class="card-body chat-messages p-4"
+      class="chat-messages"
     >
-      <div v-if="!chatStore.messages.length" class="text-center text-muted my-4">
-        <i class="bi bi-chat-dots display-4 mb-3 d-block"></i>
-        <p>Start a conversation with our AI assistant to get help with event booking!</p>
-        <button 
-          @click="sendMessage('List all available events')" 
-          class="btn btn-primary"
-        >
-          Show Available Events
-        </button>
+      <div v-if="!chatStore.messages.length" class="empty-chat">
+        <i class="bi bi-chat-dots mb-2"></i>
+        <p>Start a conversation with our AI assistant!</p>
       </div>
 
       <template v-for="(message, index) in chatStore.messages" :key="index">
         <div 
           :class="[
-            'message mb-3 d-flex',
-            message.role === 'user' ? 'justify-content-end' : 'justify-content-start'
+            'message',
+            message.role === 'user' ? 'message-user' : 'message-assistant'
           ]"
         >
-          <div 
-            :class="[
-              'message-content p-3 rounded-3',
-              message.role === 'user' ? 'bg-primary text-white' : 'bg-light'
-            ]"
-            style="max-width: 80%;"
-          >
+          <div class="message-bubble">
             <div class="message-text">
-              <pre v-if="message.content.includes('📋 Booking Confirmation')" 
-                   class="booking-confirmation">{{ formatBookingMessage(message.content) }}</pre>
-              <template v-else>
-                <div v-if="message.content.includes('/tickets/')" 
-                     class="booking-confirmation-wrapper">
-                  <div v-html="formatMessageWithLinks(message.content)" />
-                  <!-- Render QR code separately -->
-                  <QRCode v-if="currentBooking"
-                          :value="generateQRData(
-                            currentBooking.bookingId,
-                            currentBooking.event,
-                            currentBooking.quantity
-                          )"
-                          :size="150"
-                          level="H"
-                          render-as="svg"
-                          class="qr-code-overlay"
-                  />
-                </div>
-                <template v-else>
-                  {{ message.content.replace('[EVENTS_LIST]', '') }}
-                </template>
-              </template>
+              {{ message.content.replace('[EVENTS_LIST]', '') }}
               
               <!-- Event Quick Actions -->
               <div v-if="message.role === 'assistant' && isEventListing(message.content)" 
-                   class="event-quick-actions mt-3">
+                   class="event-cards">
                 <div v-for="event in getEventsForListing()" 
                      :key="event.id" 
-                     class="event-action-card mb-2 p-3 bg-white rounded-3 shadow-sm">
-                  <div class="d-flex justify-content-between align-items-center mb-2">
-                    <h6 class="mb-0 text-dark">{{ event.title }}</h6>
-                    <span class="badge bg-primary">{{ event.category }}</span>
+                     class="event-card"
+                >
+                  <div class="event-header">
+                    <h6>{{ event.title }}</h6>
+                    <span class="event-badge">{{ event.category }}</span>
                   </div>
-                  <div class="d-flex justify-content-between align-items-center text-muted small mb-2">
+                  
+                  <div class="event-details">
                     <span>
                       <i class="bi bi-calendar3 me-1"></i>
                       {{ new Date(event.date).toLocaleDateString() }}
                     </span>
                     <span>
                       <i class="bi bi-ticket-perforated me-1"></i>
-                      {{ event.availableTickets }} available
+                      {{ event.availableTickets }} left
                     </span>
                   </div>
-                  <div class="d-flex gap-2">
+                  
+                  <div class="event-actions">
                     <button 
                       @click="sendMessage(`Tell me more about ${event.title}`)"
-                      class="btn btn-outline-primary btn-sm flex-grow-1"
+                      class="action-button info"
                     >
-                      <i class="bi bi-info-circle me-1"></i> Details
+                      <i class="bi bi-info-circle"></i>
+                      Details
                     </button>
                     <button 
-                      @click="sendMessage(`I want to book 1 ticket for ${event.title}`)"
-                      class="btn btn-primary btn-sm flex-grow-1"
+                      @click="sendMessage(`I want to book  ticket for ${event.title}`)"
+                      class="action-button book"
                     >
-                      <i class="bi bi-ticket me-1"></i> Book Now
+                      <i class="bi bi-ticket"></i>
+                      Book Now
                     </button>
                   </div>
                 </div>
               </div>
             </div>
-            <div 
-              :class="[
-                'message-time small mt-2',
-                message.role === 'user' ? 'text-white-50' : 'text-muted'
-              ]"
-            >
-              {{ formatTime(message.timestamp) }}
-            </div>
+            <time class="message-time">{{ formatTime(message.timestamp) }}</time>
           </div>
         </div>
       </template>
 
       <!-- Loading Indicator -->
-      <div v-if="chatStore.isLoading" class="message mb-3 d-flex justify-content-start">
-        <div class="message-content p-3 rounded-3 bg-light">
-          <div class="typing-indicator">
+      <div v-if="chatStore.isLoading" class="message message-assistant">
+        <div class="message-bubble loading">
+          <div class="typing-dots">
             <span></span>
             <span></span>
             <span></span>
           </div>
         </div>
       </div>
-    </div>
+    </main>
 
     <!-- Chat Input -->
-    <div class="card-footer border-top p-3">
-      <form @submit.prevent="sendMessage()" class="d-flex gap-2">
-        <input
-          v-model="newMessage"
-          type="text"
-          class="form-control"
-          placeholder="Type your message..."
-          :disabled="chatStore.isLoading"
-        >
-        <button 
-          type="submit" 
-          class="btn btn-primary px-4"
-          :disabled="!newMessage.trim() || chatStore.isLoading"
-        >
-          <i class="bi bi-send"></i>
-        </button>
-      </form>
-    </div>
-  </div>
+    <footer class="chat-input">
+      <div class="input-container">
+        <form @submit.prevent="sendMessage()" class="input-form">
+          <input
+            v-model="newMessage"
+            type="text"
+            placeholder="Type your message..."
+            :disabled="chatStore.isLoading"
+          >
+          <button 
+            type="submit" 
+            :disabled="!newMessage.trim() || chatStore.isLoading"
+            class="send-button"
+          >
+            <i class="bi bi-send-fill"></i>
+          </button>
+        </form>
+      </div>
+    </footer>
 
-  <!-- Add at the end of the template -->
-  <PaymentModal
-    :show="chatStore.showPayment"
-    :amount="paymentAmount"
-    @success="handlePaymentSuccess"
-    @cancel="chatStore.showPayment = false"
-  />
+    <!-- Add back the payment modal -->
+    <PaymentModal
+      :show="chatStore.showPayment"
+      :amount="paymentAmount"
+      @success="handlePaymentSuccess"
+      @cancel="chatStore.showPayment = false"
+    />
+  </div>
 </template>
 
 <style scoped>
-.chat-widget {
-  height: 600px;
+.mobile-chat {
   display: flex;
   flex-direction: column;
+  height: calc(var(--vh, 1vh) * 100);
+  background: #f8f9fa;
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 1000;
+}
+
+.chat-header {
+  padding: 0.75rem;
+  background: white;
+  color: #1a1a1a;
+  border-bottom: 1px solid #eaeaea;
+}
+
+.header-content {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  max-width: 768px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.back-button {
+  width: 2rem;
+  height: 2rem;
+  border: none;
+  background: transparent;
+  color: #1a1a1a;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.25rem;
+  padding: 0;
+  transition: all 0.2s ease;
+}
+
+.back-button:hover {
+  color: #0d6efd;
+  transform: translateX(-2px);
+}
+
+.assistant-info {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex: 1;
+}
+
+.avatar {
+  width: 2.5rem;
+  height: 2.5rem;
+  background: linear-gradient(135deg, #0d6efd, #0099ff);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-size: 1.25rem;
+  box-shadow: 0 2px 6px rgba(13, 110, 253, 0.2);
+}
+
+.info {
+  display: flex;
+  flex-direction: column;
+}
+
+.title {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 600;
+  color: #1a1a1a;
+}
+
+.status {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  font-size: 0.75rem;
+  color: #666;
+}
+
+.status-dot {
+  width: 0.5rem;
+  height: 0.5rem;
+  background: #22c55e;
+  border-radius: 50%;
+  display: block;
+  position: relative;
+}
+
+.status-dot::after {
+  content: '';
+  position: absolute;
+  top: -1px;
+  left: -1px;
+  right: -1px;
+  bottom: -1px;
+  background: #22c55e;
+  border-radius: 50%;
+  animation: pulse 2s infinite;
+  opacity: 0.5;
+}
+
+@keyframes pulse {
+  0% {
+    transform: scale(1);
+    opacity: 0.5;
+  }
+  50% {
+    transform: scale(2);
+    opacity: 0;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 0.5;
+  }
 }
 
 .chat-messages {
   flex: 1;
   overflow-y: auto;
-}
-
-.message-content {
-  box-shadow: 0 1px 2px rgba(0,0,0,0.1);
-}
-
-.event-action-card {
-  transition: transform 0.2s, box-shadow 0.2s;
-  border: 1px solid rgba(0,0,0,0.1);
-}
-
-.event-action-card:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-}
-
-.event-quick-actions {
-  max-width: 600px;
-}
-
-/* Typing indicator animation */
-.typing-indicator {
+  padding: 1rem;
   display: flex;
-  gap: 4px;
+  flex-direction: column;
+  gap: 0.75rem;
+  background: #f8f9fa;
 }
 
-.typing-indicator span {
-  width: 8px;
-  height: 8px;
-  background-color: #6c757d;
+.empty-chat {
+  text-align: center;
+  color: #6c757d;
+  padding: 2rem 1rem;
+}
+
+.empty-chat i {
+  font-size: 2.5rem;
+  display: block;
+}
+
+.message {
+  display: flex;
+  margin-bottom: 0.5rem;
+}
+
+.message-user {
+  justify-content: flex-end;
+}
+
+.message-bubble {
+  max-width: 85%;
+  padding: 0.875rem 1rem;
+  border-radius: 1.25rem;
+  position: relative;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+}
+
+.message-user .message-bubble {
+  background: linear-gradient(135deg, #0d6efd, #0099ff);
+  color: white;
+  border-bottom-right-radius: 0.375rem;
+}
+
+.message-assistant .message-bubble {
+  background: white;
+  color: #1a1a1a;
+  border-bottom-left-radius: 0.375rem;
+}
+
+.message-time {
+  font-size: 0.75rem;
+  color: #6c757d;
+  margin-top: 0.25rem;
+  display: block;
+}
+
+.message-user .message-time {
+  color: rgba(255,255,255,0.7);
+}
+
+.chat-input {
+  padding: 0.75rem 1rem;
+  background: white;
+  border-top: 1px solid #eaeaea;
+  position: sticky;
+  bottom: 0;
+  z-index: 10;
+}
+
+.input-container {
+  max-width: 768px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.input-form {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+  background: #f8f9fa;
+  padding: 0.5rem;
+  border-radius: 1.75rem;
+  border: 1px solid #eaeaea;
+}
+
+.input-form input {
+  flex: 1;
+  padding: 0.75rem 1.25rem;
+  border: none;
+  border-radius: 1.5rem;
+  background: transparent;
+  font-size: 0.9375rem;
+  transition: all 0.2s ease;
+  min-width: 0;
+}
+
+.input-form input:focus {
+  outline: none;
+  background: transparent;
+  box-shadow: none;
+}
+
+.send-button {
+  width: 2.75rem;
+  height: 2.75rem;
+  min-width: 2.75rem;
   border-radius: 50%;
-  animation: typing 1s infinite ease-in-out;
+  border: none;
+  background: #0d6efd;
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  transition: all 0.2s ease;
+  margin-left: auto;
 }
 
-.typing-indicator span:nth-child(2) {
-  animation-delay: 0.2s;
+.send-button:disabled {
+  background: #6c757d;
+  cursor: not-allowed;
 }
 
-.typing-indicator span:nth-child(3) {
-  animation-delay: 0.4s;
+.send-button:not(:disabled):hover {
+  background: #0b5ed7;
+  transform: scale(1.05);
 }
 
-@keyframes typing {
-  0%, 100% {
-    transform: translateY(0);
-  }
-  50% {
-    transform: translateY(-5px);
-  }
+.typing-dots {
+  display: flex;
+  gap: 0.25rem;
+  padding: 0.25rem;
 }
 
-/* Custom scrollbar */
+.typing-dots span {
+  width: 0.5rem;
+  height: 0.5rem;
+  background: #6c757d;
+  border-radius: 50%;
+  animation: bounce 1s infinite;
+}
+
+.typing-dots span:nth-child(2) { animation-delay: 0.2s; }
+.typing-dots span:nth-child(3) { animation-delay: 0.4s; }
+
+@keyframes bounce {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-4px); }
+}
+
+/* Hide scrollbar but keep functionality */
+.chat-messages {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
 .chat-messages::-webkit-scrollbar {
-  width: 6px;
+  display: none;
 }
 
-.chat-messages::-webkit-scrollbar-track {
-  background: #f1f1f1;
+/* Mobile-specific styles */
+@media (max-width: 768px) {
+  .message-bubble {
+    max-width: 90%;
+  }
+
+  .chat-header {
+    padding: 0.75rem 1rem;
+  }
+
+  .chat-input {
+    padding: 0.625rem 0.75rem;
+  }
+
+  .input-form {
+    padding: 0.375rem;
+  }
+
+  .input-form input {
+    padding: 0.625rem 1rem;
+  }
+
+  .send-button {
+    width: 2.5rem;
+    height: 2.5rem;
+    min-width: 2.5rem;
+  }
 }
 
-.chat-messages::-webkit-scrollbar-thumb {
-  background: #ccc;
-  border-radius: 3px;
+/* Event Cards Styling */
+.event-cards {
+  margin-top: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
 }
 
-.chat-messages::-webkit-scrollbar-thumb:hover {
-  background: #999;
+.event-card {
+  background: white;
+  border-radius: 1rem;
+  padding: 1rem;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+  border: 1px solid #eaeaea;
+  transition: transform 0.2s ease;
 }
 
+.event-card:hover {
+  transform: translateY(-2px);
+}
+
+.event-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.75rem;
+}
+
+.event-header h6 {
+  margin: 0;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: #1a1a1a;
+}
+
+.event-badge {
+  font-size: 0.75rem;
+  padding: 0.25rem 0.75rem;
+  background: #f0f7ff;
+  color: #0d6efd;
+  border-radius: 1rem;
+  font-weight: 500;
+}
+
+.event-details {
+  display: flex;
+  gap: 1rem;
+  font-size: 0.8125rem;
+  color: #666;
+  margin-bottom: 1rem;
+}
+
+.event-details i {
+  color: #0d6efd;
+}
+
+.event-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.action-button {
+  flex: 1;
+  padding: 0.5rem;
+  border: none;
+  border-radius: 0.75rem;
+  font-size: 0.875rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.375rem;
+  transition: all 0.2s ease;
+  cursor: pointer;
+}
+
+.action-button.info {
+  background: #f8f9fa;
+  color: #1a1a1a;
+}
+
+.action-button.info:hover {
+  background: #e9ecef;
+}
+
+.action-button.book {
+  background: #0d6efd;
+  color: white;
+}
+
+.action-button.book:hover {
+  background: #0b5ed7;
+}
+
+/* Adjust message bubble for events list */
+.message-bubble {
+  max-width: 85%;
+  padding: 0.875rem 1rem;
+}
+
+.message-assistant .message-bubble:has(.event-cards) {
+  max-width: 100%;
+  width: 100%;
+  background: transparent;
+  box-shadow: none;
+  padding: 0;
+}
+
+/* Mobile optimizations */
+@media (max-width: 768px) {
+  .event-card {
+    padding: 0.875rem;
+  }
+  
+  .event-actions {
+    flex-direction: row;
+  }
+  
+  .action-button {
+    padding: 0.5rem 0.75rem;
+    font-size: 0.8125rem;
+  }
+}
+
+/* Add payment modal styles */
+:deep(.payment-modal) {
+  z-index: 1100; /* Ensure modal appears above chat interface */
+}
+
+/* Add booking confirmation styles */
 .booking-confirmation {
   font-family: inherit;
+  white-space: pre-line;
+  margin: 0;
+  padding: 0;
   background: none;
   border: none;
-  padding: 0;
-  margin: 0;
-  white-space: pre-line;
   color: inherit;
 }
 
-.message-text :deep(a) {
-  text-decoration: none;
-}
-
-.message-text :deep(a:hover) {
-  text-decoration: underline;
-}
-
 .booking-confirmation-wrapper {
-  position: relative;
-}
-
-.qr-code-placeholder {
-  width: 150px;
-  height: 150px;
-}
-
-.qr-code-overlay {
-  position: absolute;
-  top: 24px; /* Adjust based on your padding */
-  left: 50%;
-  transform: translateX(-50%);
+  background: white;
+  border-radius: 1rem;
+  padding: 1rem;
+  margin-top: 0.5rem;
+  border: 1px solid #eaeaea;
 }
 </style> 
