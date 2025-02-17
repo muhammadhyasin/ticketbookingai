@@ -5,12 +5,15 @@ import { useRouter } from 'vue-router'
 import { useEventStore } from '../../stores/events'
 import PaymentModal from '../payment/PaymentModal.vue'
 import type { Event } from '../../types/event'
+import LanguageSelector from './LanguageSelector.vue'
+import ChatMessage from './ChatMessage.vue'
 
 const router = useRouter()
 const chatStore = useChatStore()
 const eventStore = useEventStore()
 const newMessage = ref('')
 const chatContainer = ref<HTMLElement | null>(null)
+const showLanguageSelector = ref(false)
 
 const scrollToBottom = async () => {
   await nextTick()
@@ -77,8 +80,18 @@ const formatBookingMessage = (content: string) => {
   return content.substring(0, jsonStartIndex).trim()
 }
 
+const hasSelectedLanguage = computed(() => {
+  return chatStore.selectedLanguage !== null
+})
+
+// Remove handleLanguageSelected function since we don't need it anymore
+// Instead, add this function to handle language modal visibility
+const toggleLanguageSelector = () => {
+  showLanguageSelector.value = !showLanguageSelector.value
+}
+
 onMounted(() => {
-  chatStore.initializeChat()
+  chatStore.initializeChat() // Initialize chat immediately with default English
   adjustHeight()
   window.addEventListener('resize', adjustHeight)
 })
@@ -90,7 +103,7 @@ onUnmounted(() => {
 
 <template>
   <div class="mobile-chat">
-    <!-- Modern Chat Header -->
+    <!-- Chat Header -->
     <header class="chat-header">
       <div class="header-content">
         <button @click="goToDashboard" class="back-button">
@@ -113,10 +126,7 @@ onUnmounted(() => {
     </header>
 
     <!-- Chat Messages -->
-    <main 
-      ref="chatContainer"
-      class="chat-messages"
-    >
+    <main ref="chatContainer" class="chat-messages">
       <div v-if="!chatStore.messages.length" class="empty-chat">
         <i class="bi bi-chat-dots mb-2"></i>
         <p>Start a conversation with our AI assistant!</p>
@@ -196,6 +206,13 @@ onUnmounted(() => {
     <footer class="chat-input">
       <div class="input-container">
         <form @submit.prevent="sendMessage()" class="input-form">
+          <button 
+            type="button"
+            class="language-button"
+            @click="toggleLanguageSelector"
+          >
+            <i class="bi bi-translate"></i>
+          </button>
           <input
             v-model="newMessage"
             type="text"
@@ -213,7 +230,13 @@ onUnmounted(() => {
       </div>
     </footer>
 
-    <!-- Add back the payment modal -->
+    <!-- Language Selector Modal -->
+    <LanguageSelector 
+      v-if="showLanguageSelector"
+      @language-selected="showLanguageSelector = false"
+    />
+
+    <!-- Payment Modal -->
     <PaymentModal
       :show="chatStore.showPayment"
       :amount="paymentAmount"
@@ -427,55 +450,59 @@ onUnmounted(() => {
 
 .input-form {
   display: flex;
-  gap: 0.75rem;
   align-items: center;
-  background: #f8f9fa;
-  padding: 0.5rem;
-  border-radius: 1.75rem;
-  border: 1px solid #eaeaea;
-}
-
-.input-form input {
-  flex: 1;
-  padding: 0.75rem 1.25rem;
-  border: none;
+  gap: 0.5rem;
+  width: 100%;
+  background: white;
   border-radius: 1.5rem;
-  background: transparent;
-  font-size: 0.9375rem;
-  transition: all 0.2s ease;
-  min-width: 0;
+  padding: 0.5rem;
 }
 
-.input-form input:focus {
-  outline: none;
-  background: transparent;
-  box-shadow: none;
-}
-
-.send-button {
-  width: 2.75rem;
-  height: 2.75rem;
-  min-width: 2.75rem;
-  border-radius: 50%;
+.language-button {
+  background: none;
   border: none;
-  background: #0d6efd;
-  color: white;
+  padding: 0.5rem;
+  color: #6c757d;
+  font-size: 1.25rem;
+  cursor: pointer;
+  transition: color 0.2s ease;
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 0;
-  transition: all 0.2s ease;
-  margin-left: auto;
+}
+
+.language-button:hover {
+  color: #0d6efd;
+}
+
+input {
+  flex: 1;
+  border: none;
+  padding: 0.5rem;
+  outline: none;
+  font-size: 1rem;
+}
+
+.send-button {
+  background: none;
+  border: none;
+  padding: 0.5rem;
+  color: #0d6efd;
+  font-size: 1.25rem;
+  cursor: pointer;
+  transition: transform 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.send-button:hover {
+  transform: scale(1.1);
 }
 
 .send-button:disabled {
-  background: #6c757d;
+  color: #6c757d;
   cursor: not-allowed;
-}
-
-.send-button:not(:disabled):hover {
-  background: #0b5ed7;
-  transform: scale(1.05);
 }
 
 .typing-dots {

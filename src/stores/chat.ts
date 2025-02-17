@@ -16,6 +16,9 @@ type PendingBooking = {
 
 const GUIDE_COST = 40 // Add constant for guide cost
 
+// Add type for supported languages
+export type SupportedLanguage = 'en' | 'hi' | 'ta' | 'ml'
+
 export const useChatStore = defineStore('chat', () => {
   const messages = vueRef<Message[]>([])
   const isLoading = vueRef(false)
@@ -28,6 +31,9 @@ export const useChatStore = defineStore('chat', () => {
   // Add payment state
   const showPayment = vueRef(false)
   const pendingBooking = vueRef<PendingBooking | null>(null)
+
+  // Add language state
+  const selectedLanguage = vueRef<SupportedLanguage>('en')
 
   // Update the paymentAmount computed property to include guide cost
   const paymentAmount = computed(() => {
@@ -155,6 +161,16 @@ Please complete the payment process to confirm your tickets.`
 
   const processMessage = async (content: string) => {
     try {
+      // Add language context to the message
+      const languageContext = {
+        en: "Respond in English",
+        hi: "हिंदी में जवाब दें",
+        ta: "தமிழில் பதிலளிக்கவும்",
+        ml: "മലയാളത്തിൽ മറുപടി നൽകുക"
+      }
+
+      const messageWithContext = `${languageContext[selectedLanguage.value]}: ${content}`
+      
       // If waiting for ticket quantity
       if (pendingBooking.value && pendingBooking.value.quantity === 0) {
         const quantity = parseInt(content)
@@ -180,7 +196,7 @@ Please complete the payment process to confirm your tickets.`
         throw new Error('Chat session not initialized')
       }
 
-      const result = await chatSession.value.sendMessage(content)
+      const result = await chatSession.value.sendMessage(messageWithContext)
       const response = await result.response
       let assistantMessage = response.text()
 
@@ -298,6 +314,7 @@ Need anything else?`,
     handleTicketQuantity,
     processMessage,
     handleGuideResponse,
-    paymentAmount
+    paymentAmount,
+    selectedLanguage
   }
 }) 
