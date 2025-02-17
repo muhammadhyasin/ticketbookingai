@@ -28,7 +28,7 @@ const toggleMenu = () => {
           <div class="brand-icon">
             <i class="bi bi-ticket-perforated-fill"></i>
           </div>
-          <span class="brand-text">Events</span>
+          <span class="brand-text">TourGenie</span>
         </router-link>
 
         <div class="nav-actions">
